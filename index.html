@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>도트 군대</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <header id="hud">
+    <div class="hud-l"><span id="insignia" class="insignia civ"></span><div><div id="hudName">—</div><div id="hudSub" class="sub">스무 살</div></div></div>
+    <div class="hud-c"><div id="hudDate"></div><div id="hudDday" class="sub"></div></div>
+    <div class="hud-r"><div id="hudMoney"></div><div id="hudLeave" class="sub"></div></div>
+    <div class="stats">
+      <div class="st"><span>체력</span><div class="bar"><i id="stHp"></i></div><b>0</b></div>
+      <div class="st"><span>멘탈</span><div class="bar"><i id="stMental"></i></div><b>0</b></div>
+      <div class="st"><span>숙련</span><div class="bar"><i id="stSkill"></i></div><b>0</b></div>
+      <div class="st"><span>평판</span><div class="bar"><i id="stRep"></i></div><b>0</b></div>
+    </div>
+  </header>
+  <div id="progress" role="progressbar" aria-label="전체 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+    <div class="prog-top"><span>전체 진행률</span><b id="progPct">0.0%</b></div>
+    <div class="prog-track"><div id="progFill"></div><div id="progMarks"></div></div>
+  </div>
+  <main id="stage">
+    <canvas id="screen" width="320" height="180"></canvas>
+    <div id="titleCard" hidden></div>
+    <div id="toasts"></div>
+    <div id="mgUI" hidden></div>
+    <div id="startMenu">
+      <h1>도트 군대</h1>
+      <p>입영통지서부터 전역까지</p>
+      <button id="btnNew" class="choice"><span class="cl">새로 시작</span></button>
+      <button id="btnCont" class="choice" hidden><span class="cl">이어하기</span></button>
+      <small>2026년 제도 기준 · 게임용 단순화 · 등장 문서는 가상</small>
+    </div>
+  </main>
+  <section id="dialog" aria-live="polite">
+    <div id="speaker" hidden></div>
+    <div id="text"></div>
+    <div id="choices"></div>
+    <div id="nextInd" hidden>▼</div>
+  </section>
+  <nav id="menu">
+    <button id="btnNote">수첩</button>
+    <button id="btnBgm" aria-pressed="false">♪ BGM 꺼짐</button>
+    <button id="btnSpeed">글자 보통</button>
+    <button id="btnFast" aria-pressed="false">진행 보통</button>
+    <button id="btnReset">처음부터</button>
+  </nav>
+</div>
+<div id="modal" hidden><div class="modal-in"><div id="modalBody"></div><button id="modalClose" class="choice">확인</button></div></div>
+<script src="js/util.js"></script>
+<script src="js/data.js"></script>
+<script src="js/render.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/minigames.js"></script>
+<script src="js/story.js"></script>
+<script src="js/events.js"></script>
+<script>
+(function () {
+  const { G, R, St } = DM;
+  G.initUI();
+  R.init(document.getElementById('screen'));
+  R.set('title', { month: new Date().getMonth() + 1 });
+  // 테스트용: ?auto=1&branch=navy 처럼 군을 고정
+  const fb = G.params.get('branch');
+  if (fb) {
+    G.forcePass = true;
+    const order = ['air', 'navy', 'marine', 'tech'];
+    G.autoPick = (p) => {
+      if (!p) return null;
+      if (p.includes('입영 방법')) return fb === 'army' ? 0 : 1;
+      if (p.includes('어디에 지원')) return Math.max(0, order.indexOf(fb));
+      return null;
+    };
+  }
+  const menu = document.getElementById('startMenu');
+  const cont = document.getElementById('btnCont');
+  cont.hidden = !G.hasSave();
+  const PH = { prologue: St.prologue, notice: St.notice, pre: St.pre, training: St.training, school: St.school, transfer: St.transfer, unit: St.unitMonth, final: St.final };
+  async function run() {
+    menu.hidden = true;
+    const s = G.S();
+    G.hud();
+    let guard = 0;
+    while (s.phase !== 'end' && guard++ < 400) {
+      G.save();
+      const f = PH[s.phase];
+      if (!f) break;
+      await f();
+      if (G.AUTO) await new Promise((r) => setTimeout(r, 0));
+    }
+    G.save();
+    await St.ending();
+    window.__done = { phase: s.phase, rank: G.rankName(), branch: s.branch, unit: s.unit && s.unit.name, dispatches: s.dispatches.map((d) => d.id), days: G.totalDays() };
+    if (!G.AUTO) {
+      G.clearSave();
+      location.reload();
+    }
+  }
+  const fail = (e) => {
+    console.error(e);
+    window.__err = String(e && e.stack || e);
+  };
+  document.getElementById('btnNew').addEventListener('click', () => {
+    G.clearSave();
+    G.newState();
+    run().catch(fail);
+  });
+  cont.addEventListener('click', () => {
+    G.load();
+    run().catch(fail);
+  });
+  if (G.AUTO) {
+    G.newState();
+    run().catch(fail);
+  }
+})();
+</script>
+</body>
+</html>
